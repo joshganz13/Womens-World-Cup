@@ -1,0 +1,212 @@
+---
+title: "Women's World Cup"
+author: "Joshua Ganz, Julian Mucha, Eric Rwabuhihi"
+date: "October 28, 2019"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+---
+
+```{r setup, include=FALSE}
+#install packages flexdashboard, tidyverse, ggimage, ggthemes, plotly, cowplot, sf, rworldmap, and rgeos and run library.
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(flexdashboard, tidyverse, ggimage, ggthemes, plotly, cowplot, sf, rworldmap, rgeos)
+```
+
+### Amanda Peterson Plunkett #tidytuesday Women's World Cup post. {.no-padding}
+```{r message=F, warning=F}
+
+#Get the data
+wwc_outcomes <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/wwc_outcomes.csv")
+squads <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/squads.csv")
+codes <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/codes.csv")
+
+#get alternative country codes
+more_codes <- countrycode::codelist_panel %>% 
+  group_by(country.name.en) %>% 
+  top_n(1, year) %>%
+  select(country.name.en, ioc, iso2c, iso3c, genc3c, fips)
+
+#join data with codes
+wwc_outcomes_wcodes <- dplyr::left_join(wwc_outcomes, codes, by = "team") %>%
+  select(year, team, score, country) %>%
+  left_join(more_codes, by = c("team" = "ioc")) %>%
+  mutate(year = as.character(year))
+#Fix England:
+wwc_outcomes_wcodes[wwc_outcomes_wcodes$country == "England", "iso2c"] <- "GB"
+
+#Limit plot to top scoring countries 
+top_countries <- wwc_outcomes %>%
+  group_by(team) %>%
+  summarize(total_score = sum(score)) %>%
+  top_n(11, total_score) 
+
+#plot
+ggplot(inner_join(wwc_outcomes_wcodes, top_countries), 
+       aes(reorder(country, total_score), score, fill = year)) + 
+  geom_col(position = position_stack(reverse = TRUE)) + #adjusted position_stack to have years increase from left to right
+  ggthemes::scale_fill_tableau(name="Year") +           #nice colors
+  coord_flip() +
+  labs(
+    title = "Womens World Cup Soccer: Total Goals (1991 - 2019)",
+    caption = "Data from https://data.world/sportsvizsunday/womens-world-cup-data"
+  ) +
+  geom_flag(y = -5, aes(image = iso2c)) +
+  expand_limits(y = -5) +
+ # geom_image(aes(x = "France", y = 120, 
+                 #image = "~/tidytuesday/2019/week28/soccer2.png"),
+            # size = 0.15) +
+  theme_minimal() +
+  theme(title = element_text(size=14),
+        panel.grid = element_blank(), 
+        axis.ticks.y = element_blank(),
+        axis.title = element_blank(),
+        strip.text.y = element_text(angle = 180)) + 
+  guides(fill = guide_legend(reverse = TRUE))  #put 2019 at top of legend
+
+```
+
+### Modified Selectioin: interactive visual based on our group's critique. {.no-padding}
+```{r message=F, warning=F}
+
+#Get the data
+critique_wwc_outcomes <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/wwc_outcomes.csv")
+critique_squads <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/squads.csv")
+critique_codes <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/codes.csv")
+
+#join data with codes
+critique_wwc_outcomes_wcodes <- left_join(critique_wwc_outcomes, codes, by = "team") %>%
+  mutate(year = as.character(year))%>%
+  select(year, country, score)
+
+#Limit plot to top scoring countries 
+critique_top_countries <- critique_wwc_outcomes_wcodes %>%
+  group_by(country) %>%
+  summarize(total_score = sum(score)) %>%
+  top_n(9, total_score) 
+
+#add rows for years countries were not in the WC
+newrow = c("1991", "England", ' ')
+critique_wwc_outcomes_wcodes = rbind(critique_wwc_outcomes_wcodes,newrow)
+newrow1 = c("1999", "England", ' ')
+critique_wwc_outcomes_wcodes = rbind(critique_wwc_outcomes_wcodes,newrow1)
+newrow2 = c("2003", "England", ' ')
+critique_wwc_outcomes_wcodes = rbind(critique_wwc_outcomes_wcodes,newrow2)
+newrow3 = c("2011", "China PR", ' ')
+critique_wwc_outcomes_wcodes = rbind(critique_wwc_outcomes_wcodes,newrow3)
+newrow4 = c("1991", "Australia", ' ')
+critique_wwc_outcomes_wcodes = rbind(critique_wwc_outcomes_wcodes,newrow4)
+
+#Change score 'type' to numeric
+critique_wwc_outcomes_wcodes$score = as.numeric(critique_wwc_outcomes_wcodes$score)
+
+#join data
+critique_joined_wwc <- inner_join(critique_wwc_outcomes_wcodes, critique_top_countries)
+critique_joined_wwc$country <- gsub("China PR", "China", critique_joined_wwc$country)
+
+#create data to plot total tournament goals by country and year
+critique_plot <- critique_joined_wwc %>%
+  group_by(year, country)%>%
+  summarize(year_score=sum(score))#%>%
+
+#create data for total goals over all years
+critique_plot1 <- critique_joined_wwc %>%
+  group_by(year, country)%>%
+  summarize(total_score = median(total_score))
+
+#merge plot and plot1 to use for line graph
+critique_plot_final <- merge(critique_plot, critique_plot1, by = c("year", "country"))
+colnames(critique_plot_final)[4] <- "total_goals_combine_all"
+colnames(critique_plot_final)[3] <- "year_goals"
+
+#plot goals scored by year and make it interactive
+critique_goal_plot <- ggplot(critique_plot_final, mapping = aes(year, year_goals, color = country, total_goals_combine_all= total_goals_combine_all)) +
+  geom_point(mapping = aes(group = country), size=2) +
+  geom_path(mapping = aes(group=country), na.rm = FALSE) +
+  facet_wrap(~country)+
+  labs(y = "", x = "",
+    title = "Women's World Cup Goals per Year (1991 - 2019: Top 9 Countries Overall)",
+    caption = "Data from https://data.world/sportsvizsunday/womens-world-cup-data"
+  ) +
+  theme_bw() +
+  theme(panel.background = element_blank(),
+           panel.grid.major.x = element_blank(),
+           legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  scale_x_discrete()+
+  scale_y_continuous(breaks = c(0,4,8,12,16,20,24,28,32), limits = c(0,32))
+ 
+ggplotly(critique_goal_plot, tooltip = (c("year", "year_goals", "total_goals_combine_all")))
+```
+
+### Future visual our group began to incorporate a more geographical theme. We would like to make it interactive with dropdown menus and hovering information about yearly goals, cumulative goals when latter years selected,  country, and year. {.no-padding}
+```{r, message=F, warning=F}
+
+country_lats_longs <- readr::read_csv("https://raw.githubusercontent.com/albertyw/avenews/master/old/data/average-latitude-longitude-countries.csv")
+wwc_outcomes_wcodes1 <- wwc_outcomes_wcodes %>%
+  mutate(Country = country.name.en)
+
+#creates total goals scored by each team by year
+scores_by_team <- wwc_outcomes %>%
+  group_by(year, team) %>%
+  summarise(total_score = sum(score))
+
+scores_by_year <- right_join(scores_by_team, wwc_outcomes_wcodes1, by=c('team' = 'team')) %>%
+  select(team, year.x, total_score, country.name.en, Country)
+
+scores_by_year$Country[is.na(scores_by_year$Country)] <- 'Nigeria'
+
+wwc_outcomes_wcodes1 <- wwc_outcomes_wcodes1 %>%
+  group_by(year, team, country, country.name.en, iso2c, iso3c, genc3c, fips, Country) %>%
+  summarise(n = n()) %>%
+  mutate(total_score = sum(wwc_outcomes$score))
+
+wwc_outcomes_wlatsandlongs <- left_join(scores_by_year, country_lats_longs, by =c('Country' = 'Country'))
+
+map.world <- map_data('world')
+#View(map.world)
+wwc_outcomes_wlatsandlongs <- wwc_outcomes_wlatsandlongs %>%  mutate(Country = recode(Country, `United States` = 'USA'
+                                 , `United Kingdom` = 'UK'
+                                 , `Congo, Democratic Republic of the` = 'Democratic Republic of the Congo'
+                                 , `Trinidad and Tobago` = 'Trinidad'
+                                 , `Congo, Republic of the` = 'Republic of Congo'
+                                 )
+                   )
+
+#filters the source dataset for only data relating to 1991
+wwc_outcomes_wlatsandlongs1 <- wwc_outcomes_wlatsandlongs %>%
+  filter(year.x == 1991)
+
+#anti_join(wwc_outcomes_wlatsandlongs1, map.world, by = c('Country' = 'region'))
+
+#joins the latitude and longitude data with the source data so it can be mapped
+map.goals <- left_join( map.world, wwc_outcomes_wlatsandlongs1, by = c('region' = 'Country'))
+
+#builds the map
+ggplot(map.goals, aes( x = long, y = lat, group = group)) +
+  #the country fill is based on the total goals scored for each of the world cup years
+  geom_polygon(aes(fill = total_score)) +
+  #creates the fill gradient for the countries based on total score
+  scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+  #creates the Title, subtitle, and caption of the graph
+  labs(fill = 'Goals'
+       ,title = 'Goals Scored per Country'
+       ,subtitle = '1991'
+       ,caption = "Source: https://www.sharpsightlabs.com/blog/highlight-countries-on-map/"
+       ,x = NULL
+       ,y = NULL) +
+#deals with the aesthetics of the rest of the graph including text color, background color, legend color, etc.
+  theme(text = element_text(family = 'Gill Sans', color = '#000000')
+        ,plot.title = element_text(size = 28)
+        ,plot.subtitle = element_text(size = 14)
+        ,axis.ticks = element_blank()
+        ,axis.text = element_blank()
+        ,panel.grid = element_blank()
+        ,panel.background = element_rect(fill = '#bbd4dd')
+        ,plot.background = element_rect(fill = '#333333')
+        ,legend.position = c(.18,.36)
+        ,legend.background = element_blank()
+        ,legend.key = element_blank()
+        ) +
+#adjusts the alignment, font color, and face type of the title, subtitle, and caption
+  theme(plot.title = element_text(hjust=0.5, color = 'white'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = 'white'), plot.caption = element_text(size = 8, color = 'white'))
+```
