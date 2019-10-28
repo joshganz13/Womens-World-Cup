@@ -6,7 +6,14 @@ Objective: Search Twitter for #tidytuesday and find a posting relating to your d
   - Twitter post by Amanda Peterson Plunkett's post http://bit.ly/2BM4R0Z was chosen to critique and modify (Thank you, Amanda)
   - created a modified graph
   
-  Data Files Used:
+ 
+Data Files Used:
+wwc_outcomes <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/wwc_outcomes.csv")
+squads <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/squads.csv")
+codes <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-09/codes.csv")
+
+
+    
   
   
 
