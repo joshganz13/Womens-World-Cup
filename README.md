@@ -1,4 +1,4 @@
-# Womens-World-Cup
+# Women's World Cup
 Data Visualization Class
 
 Objective: Search Twitter for #tidytuesday and find a posting relating to your dataset that includes the code the Twitter user used.
